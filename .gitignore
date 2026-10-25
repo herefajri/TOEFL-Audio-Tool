@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.npm-cache/
+.tmp-install/
+.tmp-test/
+.vercel/
+coverage/
+*.log
+*.local
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.npmrc
+.DS_Store
+Thumbs.db
