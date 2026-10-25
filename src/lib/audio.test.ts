@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_AUDIO_BYTES,
   fileExtension,
+  fitTrimRange,
   guessMimeType,
   isSupportedAudioFile,
   normalizeAudioBlob,
@@ -84,5 +85,17 @@ describe('normalizeAudioBlob', () => {
 describe('MAX_AUDIO_BYTES', () => {
   it('is 300 MB', () => {
     expect(MAX_AUDIO_BYTES).toBe(300 * 1024 * 1024);
+  });
+});
+
+describe('fitTrimRange', () => {
+  it('clamps a saved range to the new duration', () => {
+    expect(fitTrimRange(2, 99, 10)).toEqual({ trimStart: 2, trimEnd: 10 });
+    expect(fitTrimRange(-1, 4, 10)).toEqual({ trimStart: 0, trimEnd: 4 });
+  });
+
+  it('keeps at least 0.1 seconds when the range is too small', () => {
+    expect(fitTrimRange(9.95, 10, 10)).toEqual({ trimStart: 9.9, trimEnd: 10 });
+    expect(fitTrimRange(0, 0, 0)).toEqual({ trimStart: 0, trimEnd: 0 });
   });
 });

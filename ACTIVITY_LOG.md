@@ -1,6 +1,6 @@
 # Activity Log
 
-Catatan kronologis perubahan **TOEFL Audio Tools**. Dokumen ini merangkum apa yang berubah, kapan, dan bagaimana perubahannya diverifikasi. Proyek ini belum memakai Git, jadi log ini menjadi riwayat perubahan utama.
+Catatan kronologis perubahan **TOEFL Audio Tools**. Dokumen ini merangkum apa yang berubah, kapan, dan bagaimana perubahannya diverifikasi. Proyek ini memakai Git; log ini melengkapi riwayat commit dengan konteks dan hasil verifikasi.
 
 Urutan entri: terbaru di atas.
 
@@ -11,16 +11,37 @@ Urutan entri: terbaru di atas.
 - **Perubahan** — ringkasan perilaku yang berubah
 - **Verifikasi** — pengecekan yang sudah dilakukan
 
+## 2026-10-25 — Perapian tabel audio
+
+**Jenis:** Perbaikan
+
+- Mengunci layout tabel agar judul panjang tidak melebarkan tabel dan mendorong Part, nomor, status, serta aksi ke luar layar.
+- Membatasi kolom judul ke 34% (minimum 240px); judul panjang dipotong dengan ellipsis, sedangkan nama lengkap tetap tersedia lewat tooltip dan mode edit.
+- Merapikan header, aksen baris aktif, kontrol Part/nomor, status, dan pemisah aksi tanpa mengubah perilaku tabel.
+
+**Verifikasi:** pengecekan layout Chrome headless (tabel 1102px, tanpa overflow horizontal), `npm run typecheck`, 57 unit test, dan `npm run build`.
+
+## 2026-10-25 — Backup preset sesi (tanpa audio)
+
+**Jenis:** Fitur
+
+- Menambahkan ekspor preset sesi ke JSON dari dialog Pengaturan sesi: nama sesi, jeda, dan metadata audio (nama file asli, nama tampilan, Part, nomor, urutan, durasi, trim). File audio tidak ikut.
+- Menambahkan impor preset di halaman utama: sesi baru dibuat dengan track berstatus **Tanpa audio**.
+- Impor audio mencocokkan nama file asli dan mengisi blob ke track preset; salinan crop dengan nama sama berbagi satu blob. File yang tidak cocok tetap menjadi track baru.
+- Track tanpa audio tidak ikut antrean putar atau mode ujian; rename, Part/nomor, urutan, dan hapus tetap tersedia. Tombol lampirkan audio disediakan untuk file yang namanya berubah.
+- Menambahkan validasi format preset (`version: 1`) dan batas ukuran file 2 MB.
+
+**Verifikasi:** 57 unit test lulus (termasuk parser/validator preset dan clamp trim), `npm run typecheck`, dan `npm run build`.
+
 ## 2026-10-25 — Persiapan deploy Vercel
 
 **Jenis:** Konfigurasi dan dokumentasi
 
-- Menambahkan `vercel.json`: framework Vite, build `npm run build`, output `dist`, dan rewrite SPA ke `index.html`.
 - Memperluas `.gitignore` untuk mengecualikan artefak lokal: `.npmrc`, `.tmp-install/`, `.tmp-test/`, `.vercel/`, log, coverage, dan file environment.
 - Menambahkan panduan deploy Vercel di `INSTALLATION.md`, termasuk pengaturan Node 22.x dan pengujian refresh URL sesi.
-- Menambahkan catatan konfigurasi Vercel di `README.md`.
+- Menambahkan catatan kebutuhan rewrite SPA di `README.md`.
 
-**Verifikasi:** `vercel.json` valid, 46 unit test lulus, dan `npm run build` berhasil. Commit/push dan deploy produksi dilakukan oleh pengguna.
+**Verifikasi:** 46 unit test lulus dan `npm run build` berhasil. Konfigurasi Vercel tidak disertakan di repo; commit/push dan deploy produksi dilakukan oleh pengguna.
 
 ## 2026-10-25 — Dokumentasi proyek
 

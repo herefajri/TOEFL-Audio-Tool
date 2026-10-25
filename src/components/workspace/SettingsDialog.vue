@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
-import { AlertTriangle, Timer } from 'lucide-vue-next';
-import type { Project } from '@/db/types';
-import { deleteProject, MAX_GAP_MS, updateProject } from '@/db/projects';
+import { AlertTriangle, Download, Timer } from 'lucide-vue-next';
+import type { Project, Track } from '@/db/types';
+import { MAX_GAP_MS } from '@/db/types';
+import { deleteProject, updateProject } from '@/db/projects';
+import { buildPreset, downloadPreset } from '@/lib/preset';
 import { formatDuration, formatGap } from '@/lib/format';
 import AppButton from '@/components/ui/AppButton.vue';
 import AppModal from '@/components/ui/AppModal.vue';
@@ -11,6 +13,7 @@ import AppModal from '@/components/ui/AppModal.vue';
 const props = defineProps<{
   open: boolean;
   project: Project | null;
+  tracks: Track[];
   trackCount: number;
   totalDuration: number;
 }>();
@@ -50,6 +53,14 @@ watch(
 
 function setGapPreset(seconds: number): void {
   gapInput.value = String(seconds);
+}
+
+function downloadBackup(): void {
+  if (!props.project) return;
+  downloadPreset(buildPreset(props.project, props.tracks));
+  toast.success('Preset diunduh', {
+    description: 'File audio tidak termasuk; salin file audio secara terpisah.',
+  });
 }
 
 async function save(): Promise<void> {
@@ -186,6 +197,23 @@ async function removeProject(): Promise<void> {
           </div>
         </div>
         <p class="mt-2 text-xs text-brand-ink">{{ currentGapLabel }}</p>
+      </div>
+
+      <div class="rounded-md border border-line bg-surface-raised p-3">
+        <div class="flex items-start gap-2">
+          <Download class="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-medium text-ink">Backup preset</p>
+            <p class="mt-1 text-xs leading-5 text-muted">
+              Simpan nama sesi, jeda, dan metadata {{ tracks.length }} audio ke file JSON.
+              File audio tidak ikut; salin audio secara terpisah ke perangkat lain.
+            </p>
+            <AppButton class="mt-2" size="sm" variant="secondary" @click="downloadBackup">
+              <Download class="size-4" aria-hidden="true" />
+              Unduh preset
+            </AppButton>
+          </div>
+        </div>
       </div>
 
       <div class="rounded-md border border-danger/20 bg-danger-soft p-3">

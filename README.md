@@ -20,6 +20,7 @@ Cocok untuk 20–60 file berdurasi 1–3 menit yang sudah berisi directions dan 
 - [Urutan dan auto-sort](#urutan-dan-auto-sort)
 - [Pemutaran dan mode ujian](#pemutaran-dan-mode-ujian)
 - [Penyimpanan lokal](#penyimpanan-lokal)
+- [Backup preset (tanpa audio)](#backup-preset-tanpa-audio)
 - [Batasan](#batasan)
 - [Troubleshooting](#troubleshooting)
 - [Pengembangan](#pengembangan)
@@ -39,6 +40,7 @@ Cocok untuk 20–60 file berdurasi 1–3 menit yang sudah berisi directions dan 
 - **Pencarian** berdasarkan nama, nama file asli, Part, atau nomor.
 - **Hapus dengan undo** (12 detik) dan pembersihan data yatim saat aplikasi dibuka.
 - **Penyimpanan lokal** memakai IndexedDB; aplikasi meminta penyimpanan persisten bila browser mendukung.
+- **Backup preset tanpa audio** — ekspor pengaturan sesi dan metadata audio ke JSON, impor di perangkat lain, lalu cocokkan file audio berdasarkan nama.
 
 ## Menjalankan
 
@@ -63,7 +65,7 @@ Perintah lain:
 | `npm run build` | Typecheck lalu build produksi ke `dist/`. |
 | `npm run preview` | Pratinjau hasil build produksi. |
 
-Build menghasilkan situs statis. Karena router memakai history mode, hosting perlu fallback SPA ke `index.html` agar URL sesi tidak 404. Konfigurasi Vercel sudah disertakan di `vercel.json`; detail deploy ada di [INSTALLATION.md](INSTALLATION.md).
+Build menghasilkan situs statis. Karena router memakai history mode, hosting perlu fallback SPA ke `index.html` agar URL sesi tidak 404. Contoh pengaturan rewrite SPA untuk Vercel, Netlify, dan Nginx ada di [INSTALLATION.md](INSTALLATION.md).
 
 ## Alur pemakaian
 
@@ -150,7 +152,24 @@ Keluar dari overlay tidak otomatis menghentikan audio. Gunakan tombol jeda jika 
 - Kapasitas tergantung kuota browser dan ruang disk. Aplikasi meminta penyimpanan persisten bila didukung, tetapi browser tetap dapat mengosongkannya dalam kondisi tertentu.
 - Menghapus sesi akan menghapus semua track dan audio di dalamnya secara permanen.
 - Menghapus satu track memberi undo 12 detik. Jika tab ditutup sebelum undo, track yang masih berstatus terhapus akan dibersihkan otomatis pada pembersihan berikutnya saat aplikasi dibuka.
-- Belum ada fitur ekspor/impor proyek atau backup cloud di V1. Simpan file audio asli tetap aman di disk.
+- Belum ada fitur ekspor/impor proyek lengkap dengan audio atau backup cloud di V1. Yang tersedia adalah **backup preset tanpa audio** (lihat bagian berikut); simpan file audio asli tetap aman di disk.
+
+## Backup preset (tanpa audio)
+
+Preset memindahkan **pengaturan dan metadata**, bukan file audio. Cocok untuk menyiapkan sesi di komputer lain tanpa mengunggah apa pun.
+
+1. Buka **Pengaturan** sesi → **Unduh preset**. File `preset-*.json` berisi nama sesi, jeda, serta nama file asli, nama tampilan, Part, nomor, urutan, durasi, dan potongan setiap audio.
+2. Salin file preset dan file audio asli ke perangkat lain (USB, Drive, WhatsApp, dan sebagainya).
+3. Di halaman utama perangkat tujuan, klik **Impor preset**, lalu pilih file JSON. Sesi baru dibuat dan setiap audio tampil dengan status **Tanpa audio**.
+4. Impor file audio seperti biasa. File yang nama aslinya sama akan otomatis mengisi baris preset; satu file juga mengisi beberapa baris hasil crop dengan nama asli yang sama. File yang tidak cocok tetap ditambahkan sebagai audio baru.
+5. Jika nama file berubah, gunakan tombol **Lampirkan file audio** pada baris tersebut.
+
+Catatan:
+
+- Track yang belum punya audio tidak ikut **Putar semua** atau **Mode ujian**, tetapi tetap bisa di-rename, diubah Part/nomornya, diurutkan, dan dihapus.
+- Pencocokan memakai nama file asli yang persis. Jaga nama file tetap sama saat menyalin.
+- Preset memakai format JSON dengan `version: 1`; file yang tidak valid atau lebih besar dari 2 MB ditolak.
+- Preset tidak menggantikan backup audio. File audio tetap harus disalin terpisah.
 
 ## Batasan
 
@@ -158,6 +177,7 @@ Keluar dari overlay tidak otomatis menghentikan audio. Gunakan tombol jeda jika 
 - Format yang didukung: MP3, WAV, dan file `.mpeg`/`.mpg` yang audionya dapat didekode browser (misalnya ekspor WhatsApp `.mpeg` yang berisi MP3). Maksimal 300 MB per file.
 - MPEG video atau MP2 yang tidak didukung browser belum dikonversi otomatis. Konversi ke MP3/WAV terlebih dahulu.
 - Tidak ada backend, autentikasi, cloud sync, atau multi-user.
+- Backup preset tidak menyertakan file audio; audio harus disalin terpisah dan dicocokkan berdasarkan nama file.
 - Fokus desktop Chrome/Edge. Tampilan responsif, tetapi pengalaman terbaik ada di layar lebar.
 - Audio harus dapat didekode oleh browser. File yang rusak atau codec tidak didukung akan ditolak saat impor.
 - Aplikasi tidak membuat narasi, directions, atau jeda soal; semua harus sudah ada di file audio.

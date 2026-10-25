@@ -8,8 +8,10 @@ import {
   Play,
   Scissors,
   Trash2,
+  Upload,
 } from 'lucide-vue-next';
 import type { Part, Track } from '@/db/types';
+import { hasAudio } from '@/db/types';
 import { PART_OPTIONS } from '@/lib/sortTracks';
 import { formatDuration } from '@/lib/format';
 import { cn } from '@/lib/cn';
@@ -28,6 +30,7 @@ const emit = defineEmits<{
   play: [id: string];
   crop: [track: Track];
   delete: [track: Track];
+  attach: [track: Track];
   rename: [id: string, name: string];
   updatePart: [id: string, part: Part];
   updateNumber: [id: string, number: number | null];
@@ -48,14 +51,17 @@ const isTrimmed = computed(
     props.track.trimStart > 0.005 ||
     Math.abs(props.track.trimEnd - props.track.duration) > 0.005,
 );
+const missingAudio = computed(() => !hasAudio(props.track));
 const trimmedDuration = computed(() =>
   Math.max(0, props.track.trimEnd - props.track.trimStart),
 );
 
 const rowClass = computed(() =>
   cn(
-    'group border-b border-line last:border-b-0 transition-colors',
-    props.isCurrent ? 'bg-brand-soft/45' : 'hover:bg-surface-raised',
+    'group border-b border-line/80 transition-colors last:border-b-0',
+    props.isCurrent
+      ? 'bg-brand-soft/50'
+      : 'hover:bg-surface-raised focus-within:bg-surface-raised',
     props.dragActive && 'opacity-40',
     props.dropTarget && 'bg-brand-soft',
   ),
@@ -145,12 +151,15 @@ function onHandleKeydown(event: KeyboardEvent): void {
     @dragover.prevent="emit('dragOver', track.id)"
     @drop.prevent="emit('drop', track.id)"
   >
-    <td class="w-10 px-1.5 py-2.5 align-middle">
+    <td
+      class="w-10 px-1 py-2.5 align-middle"
+      :class="isCurrent && 'shadow-[inset_2px_0_0_var(--color-brand)]'"
+    >
       <button
         type="button"
         :draggable="sortable"
         :disabled="!sortable"
-        class="grid size-7 cursor-grab place-items-center rounded text-muted hover:bg-canvas hover:text-ink-soft disabled:cursor-not-allowed disabled:opacity-35 active:cursor-grabbing"
+        class="grid size-8 cursor-grab place-items-center rounded-md text-muted transition-colors hover:bg-canvas hover:text-ink-soft disabled:cursor-not-allowed disabled:opacity-35 active:cursor-grabbing"
         :aria-label="`Geser ${track.displayName}. Gunakan panah atas atau bawah untuk memindahkan.`"
         :title="sortable ? 'Drag untuk mengubah urutan' : 'Hapus pencarian untuk mengubah urutan'"
         @dragstart="onDragStart"
@@ -161,7 +170,10 @@ function onHandleKeydown(event: KeyboardEvent): void {
       </button>
     </td>
 
-    <td class="w-10 px-1 py-2.5 text-right align-middle font-mono text-xs text-muted">
+    <td
+      class="w-10 px-2 py-2.5 text-right align-middle font-mono text-xs tabular-nums"
+      :class="isCurrent ? 'font-semibold text-brand-ink' : 'text-muted'"
+    >
       {{ track.order }}
     </td>
 
@@ -173,7 +185,7 @@ function onHandleKeydown(event: KeyboardEvent): void {
           type="text"
           maxlength="160"
           aria-label="Nama audio"
-          class="h-8 w-full rounded border border-brand bg-surface px-2 text-sm text-ink focus:outline-none"
+          class="h-9 w-full rounded-md border border-brand bg-surface px-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand/15"
           @keydown="onEditKeydown"
           @blur="commitEdit"
         />
@@ -182,7 +194,7 @@ function onHandleKeydown(event: KeyboardEvent): void {
       <button
         v-else
         type="button"
-        class="flex w-full min-w-0 items-center gap-2 rounded-sm text-left"
+        class="flex w-full min-w-0 items-center gap-2 rounded-md text-left"
         :title="`${track.displayName} — klik untuk mengubah nama`"
         @click="startEdit"
       >
@@ -210,8 +222,8 @@ function onHandleKeydown(event: KeyboardEvent): void {
           aria-label="Audio aktif"
         />
         <span
-          class="truncate text-sm font-medium"
-          :class="isCurrent ? 'text-brand-ink' : 'text-ink'"
+          class="truncate text-sm"
+          :class="isCurrent ? 'font-semibold text-brand-ink' : 'font-medium text-ink'"
         >
           {{ track.displayName }}
         </span>
@@ -226,7 +238,7 @@ function onHandleKeydown(event: KeyboardEvent): void {
       <select
         :value="track.part"
         aria-label="Part audio"
-        class="h-8 w-full rounded border border-line bg-surface px-1.5 text-xs font-medium text-ink-soft focus:border-brand focus:outline-none"
+        class="h-8 w-full cursor-pointer rounded-md border border-line bg-surface px-2 text-xs font-medium text-ink-soft transition-colors hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15"
         @change="onPartChange"
       >
         <option v-for="option in PART_OPTIONS" :key="option.value" :value="option.value">
@@ -245,28 +257,36 @@ function onHandleKeydown(event: KeyboardEvent): void {
         :disabled="track.part === 'FULL'"
         aria-label="Nomor audio"
         placeholder="—"
-        class="h-8 w-full rounded border border-line bg-surface px-1.5 text-center text-xs text-ink-soft focus:border-brand focus:outline-none disabled:cursor-not-allowed disabled:bg-canvas disabled:text-muted"
+        class="h-8 w-full rounded-md border border-line bg-surface px-2 text-center font-mono text-xs tabular-nums text-ink-soft transition-colors hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15 disabled:cursor-not-allowed disabled:bg-canvas disabled:text-muted [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         @change="onNumberChange"
       />
     </td>
 
     <td
-      class="w-24 px-3 py-2.5 text-right align-middle font-mono text-xs text-ink-soft"
+      class="w-24 px-3 py-2.5 text-right align-middle font-mono text-xs tabular-nums text-ink-soft"
       :title="isTrimmed ? `Durasi asli: ${formatDuration(track.duration)}` : undefined"
     >
       {{ formatDuration(trimmedDuration) }}
     </td>
 
-    <td class="w-28 px-3 py-2.5 align-middle">
+    <td class="w-32 px-3 py-2.5 align-middle">
       <span
-        v-if="isTrimmed"
-        class="inline-flex items-center gap-1 rounded-full bg-warn-soft px-2 py-0.5 text-xs font-medium text-warn"
+        v-if="missingAudio"
+        class="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-warn-soft px-2 py-0.5 text-xs font-medium text-warn"
+        title="Impor file audio dengan nama yang sama untuk melampirkan"
+      >
+        <Upload class="size-3" aria-hidden="true" />
+        Tanpa audio
+      </span>
+      <span
+        v-else-if="isTrimmed"
+        class="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-warn-soft px-2 py-0.5 text-xs font-medium text-warn"
         :title="`Diputar ${formatDuration(trimmedDuration)} dari ${formatDuration(track.duration)}`"
       >
         <Scissors class="size-3" aria-hidden="true" />
         Dipotong
       </span>
-      <span v-else class="inline-flex items-center gap-1.5 text-xs text-muted">
+      <span v-else class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-muted">
         <span class="size-1.5 rounded-full bg-brand" aria-hidden="true"></span>
         Utuh
       </span>
@@ -277,14 +297,24 @@ function onHandleKeydown(event: KeyboardEvent): void {
         <IconButton
           :label="isCurrent && isPlaying ? 'Jeda audio' : 'Putar dari sini'"
           size="sm"
+          :disabled="missingAudio"
           @click="emit('play', track.id)"
         >
           <Pause v-if="isCurrent && isPlaying" class="size-4" fill="currentColor" />
           <Play v-else class="size-4" fill="currentColor" />
         </IconButton>
-        <IconButton label="Potong audio" size="sm" @click="emit('crop', track)">
+        <IconButton
+          v-if="missingAudio"
+          label="Lampirkan file audio"
+          size="sm"
+          @click="emit('attach', track)"
+        >
+          <Upload class="size-4" />
+        </IconButton>
+        <IconButton v-else label="Potong audio" size="sm" @click="emit('crop', track)">
           <Scissors class="size-4" />
         </IconButton>
+        <span class="mx-0.5 h-4 w-px shrink-0 bg-line" aria-hidden="true"></span>
         <IconButton label="Hapus audio" size="sm" variant="danger" @click="emit('delete', track)">
           <Trash2 class="size-4" />
         </IconButton>

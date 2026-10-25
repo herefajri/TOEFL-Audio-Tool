@@ -86,7 +86,7 @@ Folder `dist/` dapat di-host di Netlify, Vercel, server Nginx, atau hosting stat
 
 ### Vercel
 
-Repo sudah menyertakan `vercel.json` yang mengatur build Vite, output `dist`, dan rewrite SPA.
+Vercel perlu rewrite SPA ke `index.html`. Tambahkan konfigurasi rewrite tersebut (misalnya lewat `vercel.json` di root repo) sebelum deploy.
 
 1. Push repo ke GitHub.
 2. Di Vercel, pilih **Add New → Project**, lalu impor repo.

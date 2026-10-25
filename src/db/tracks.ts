@@ -1,6 +1,8 @@
 import { db } from './index';
 import type { ImportResult, Part, Track, TrackKind } from './types';
+import { hasAudio } from './types';
 import {
+  fitTrimRange,
   getAudioDuration,
   guessMimeType,
   isSupportedAudioFile,
@@ -33,7 +35,7 @@ export interface OrderPatch {
 
 const deleteTimers = new Map<string, number>();
 
-function deriveKind(part: Part, number: number | null): TrackKind {
+export function deriveTrackKind(part: Part, number: number | null): TrackKind {
   if (part === 'FULL') return 'full';
   if (number !== null) return 'question';
   if (part === 'OTHER') return 'other';
@@ -59,8 +61,17 @@ export async function importAudioFiles(
   const usedNames = new Set(visible.map((track) => track.displayName));
   let nextOrder = visible.reduce((max, track) => Math.max(max, track.order), 0) + 1;
 
+  const pendingByName = new Map<string, Track[]>();
+  for (const track of visible) {
+    if (hasAudio(track)) continue;
+    const list = pendingByName.get(track.originalName) ?? [];
+    list.push(track);
+    pendingByName.set(track.originalName, list);
+  }
+
   const imported: Track[] = [];
   const errors: ImportResult['errors'] = [];
+  let attached = 0;
   let done = 0;
 
   for (const file of files) {
@@ -75,11 +86,41 @@ export async function importAudioFiles(
 
       const audioBlob = normalizeAudioBlob(file);
       const duration = await getAudioDuration(audioBlob);
+      const timestamp = Date.now();
+      const waiting = pendingByName.get(file.name);
+
+      if (waiting && waiting.length > 0) {
+        const blobId = createId();
+
+        await db.transaction('rw', db.blobs, db.tracks, async () => {
+          await db.blobs.add({
+            id: blobId,
+            blob: audioBlob,
+            mimeType: guessMimeType(file.name),
+            size: audioBlob.size,
+          });
+
+          for (const track of waiting) {
+            const trim = fitTrimRange(track.trimStart, track.trimEnd, duration);
+            await db.tracks.update(track.id, {
+              blobId,
+              duration,
+              trimStart: trim.trimStart,
+              trimEnd: trim.trimEnd,
+              updatedAt: timestamp,
+            });
+          }
+        });
+
+        pendingByName.delete(file.name);
+        attached += waiting.length;
+        continue;
+      }
+
       const meta = parseTrackName(file.name);
       const displayName = uniqueDisplayName(usedNames, file.name);
       const blobId = createId();
       const trackId = createId();
-      const timestamp = Date.now();
 
       const track: Track = {
         id: trackId,
@@ -122,8 +163,67 @@ export async function importAudioFiles(
     }
   }
 
-  if (imported.length > 0) await touchProject(projectId);
-  return { imported, errors };
+  if (imported.length > 0 || attached > 0) await touchProject(projectId);
+  return { imported, attached, errors };
+}
+
+/**
+ * Attach one audio file to a pending preset track. Tracks that share the
+ * original file name (for example cropped copies) receive the same blob.
+ */
+export async function attachAudioToPendingTracks(
+  projectId: string,
+  trackId: string,
+  file: File,
+): Promise<number> {
+  if (file.size > MAX_AUDIO_BYTES) {
+    throw new Error('Ukuran file melebihi 300 MB.');
+  }
+  if (!isSupportedAudioFile(file)) {
+    throw new Error('Format tidak didukung. Gunakan MP3, WAV, atau MPEG audio.');
+  }
+
+  const track = await db.tracks.get(trackId);
+  if (!track || track.projectId !== projectId || hasAudio(track)) {
+    throw new Error('Audio ini sudah terpasang.');
+  }
+
+  const audioBlob = normalizeAudioBlob(file);
+  const duration = await getAudioDuration(audioBlob);
+  const siblings = await db.tracks.where('projectId').equals(projectId).toArray();
+  const waiting = siblings.filter(
+    (item) =>
+      !item.deletedAt && !hasAudio(item) && item.originalName === track.originalName,
+  );
+
+  if (waiting.length === 0) throw new Error('Audio ini sudah terpasang.');
+
+  const blobId = createId();
+  const timestamp = Date.now();
+
+  await db.transaction('rw', db.blobs, db.tracks, async () => {
+    await db.blobs.add({
+      id: blobId,
+      blob: audioBlob,
+      mimeType: guessMimeType(file.name),
+      size: audioBlob.size,
+    });
+
+    for (const item of waiting) {
+      const trim = fitTrimRange(item.trimStart, item.trimEnd, duration);
+      await db.tracks.update(item.id, {
+        blobId,
+        originalName: file.name,
+        duration,
+        trimStart: trim.trimStart,
+        trimEnd: trim.trimEnd,
+        updatedAt: timestamp,
+      });
+    }
+  });
+
+  await touchProject(projectId);
+  return waiting.length;
 }
 
 export async function updateTrackMeta(id: string, patch: TrackMetaPatch): Promise<Track | undefined> {
@@ -147,7 +247,7 @@ export async function updateTrackMeta(id: string, patch: TrackMetaPatch): Promis
   }
 
   if (next.part === 'FULL') next.number = null;
-  next.kind = deriveKind(next.part, next.number);
+  next.kind = deriveTrackKind(next.part, next.number);
 
   await db.tracks.put(next);
   await touchProject(track.projectId);

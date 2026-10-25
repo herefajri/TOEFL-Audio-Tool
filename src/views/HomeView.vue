@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { toast } from 'vue-sonner';
 import {
   AudioLines,
@@ -8,14 +9,17 @@ import {
   Plus,
   ShieldCheck,
   SlidersHorizontal,
+  Upload,
 } from 'lucide-vue-next';
 import type { ProjectSummary } from '@/db/types';
 import { loadProjectSummaries } from '@/db/queries';
 import { deleteProject } from '@/db/projects';
+import { importPreset } from '@/db/presets';
 import { useLiveQuery } from '@/composables/useLiveQuery';
 import { useStorageEstimate } from '@/composables/useStorageEstimate';
 import { useDocumentTitle } from '@/composables/useDocumentTitle';
 import { usePlayerStore } from '@/stores/player';
+import { MAX_PRESET_BYTES, parsePreset } from '@/lib/preset';
 import { formatBytes, formatDuration } from '@/lib/format';
 import AppButton from '@/components/ui/AppButton.vue';
 import BrandMark from '@/components/ui/BrandMark.vue';
@@ -28,6 +32,7 @@ import ProjectRow from '@/components/home/ProjectRow.vue';
 useDocumentTitle('Sesi audio');
 
 const player = usePlayerStore();
+const router = useRouter();
 const projects = useLiveQuery<ProjectSummary[] | null>(
   () => loadProjectSummaries(),
   null,
@@ -38,6 +43,8 @@ const showForm = ref(false);
 const editingProject = ref<ProjectSummary | null>(null);
 const deletingProject = ref<ProjectSummary | null>(null);
 const deleting = ref(false);
+const presetInput = ref<HTMLInputElement | null>(null);
+const isImportingPreset = ref(false);
 
 const projectList = computed(() => projects.value ?? []);
 const totalAudio = computed(() =>
@@ -70,6 +77,40 @@ function askDelete(project: ProjectSummary): void {
   deletingProject.value = project;
 }
 
+function openPresetPicker(): void {
+  if (isImportingPreset.value) return;
+  if (presetInput.value) presetInput.value.value = '';
+  presetInput.value?.click();
+}
+
+async function onPresetFileChange(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+
+  if (file.size > MAX_PRESET_BYTES) {
+    toast.error('File preset terlalu besar (maks. 2 MB).');
+    return;
+  }
+
+  isImportingPreset.value = true;
+  try {
+    const preset = parsePreset(await file.text());
+    const project = await importPreset(preset);
+    toast.success(`Preset "${project.name}" diimpor`, {
+      description: `${preset.tracks.length} audio menunggu file. Impor audio dengan nama yang sama untuk melampirkan.`,
+    });
+    await router.push({ name: 'workspace', params: { id: project.id } });
+  } catch (errorValue) {
+    toast.error(
+      errorValue instanceof Error ? errorValue.message : 'Gagal mengimpor preset.',
+    );
+  } finally {
+    isImportingPreset.value = false;
+  }
+}
+
 async function confirmDelete(): Promise<void> {
   const project = deletingProject.value;
   if (!project) return;
@@ -95,6 +136,14 @@ onMounted(() => {
 
 <template>
   <div class="min-h-screen">
+    <input
+      ref="presetInput"
+      type="file"
+      accept=".json,application/json"
+      class="hidden"
+      @change="onPresetFileChange"
+    />
+
     <header class="border-b border-line bg-surface/90 backdrop-blur">
       <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-5 py-3 sm:px-6">
         <RouterLink to="/" class="rounded-md" aria-label="Kembali ke halaman sesi">
@@ -116,6 +165,15 @@ onMounted(() => {
             <span v-else-if="usage !== null">{{ formatBytes(usage) }} terpakai</span>
             <span v-else>Penyimpanan browser</span>
           </div>
+          <AppButton
+            variant="secondary"
+            size="sm"
+            :loading="isImportingPreset"
+            @click="openPresetPicker"
+          >
+            <Upload class="size-4" aria-hidden="true" />
+            Impor preset
+          </AppButton>
           <AppButton variant="primary" size="sm" @click="openCreate">
             <Plus class="size-4" aria-hidden="true" />
             Sesi baru

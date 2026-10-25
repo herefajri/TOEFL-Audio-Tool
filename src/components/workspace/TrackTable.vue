@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { GripVertical } from 'lucide-vue-next';
 import type { Part, Track } from '@/db/types';
 import TrackRow from './TrackRow.vue';
 
@@ -15,6 +14,7 @@ const emit = defineEmits<{
   play: [id: string];
   crop: [track: Track];
   delete: [track: Track];
+  attach: [track: Track];
   rename: [id: string, name: string];
   updatePart: [id: string, part: Part];
   updateNumber: [id: string, number: number | null];
@@ -52,20 +52,22 @@ function resetDrag(): void {
 <template>
   <div class="overflow-hidden rounded-lg border border-line bg-surface">
     <div class="overflow-x-auto">
-      <table class="w-full min-w-[820px] border-collapse text-left">
+      <table class="w-full min-w-[860px] table-fixed border-collapse text-left">
+        <caption class="sr-only">
+          Daftar audio sesi
+        </caption>
         <thead class="bg-surface-raised">
-          <tr class="border-b border-line text-xs font-medium uppercase tracking-[0.06em] text-muted">
-            <th scope="col" class="w-10 px-1.5 py-2.5">
-              <GripVertical class="mx-auto size-3.5 opacity-60" aria-hidden="true" />
+          <tr class="border-b border-line text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+            <th scope="col" class="w-10 px-1 py-3">
               <span class="sr-only">Urutan</span>
             </th>
-            <th scope="col" class="w-10 px-1 py-2.5 text-right">#</th>
-            <th scope="col" class="min-w-[240px] px-3 py-2.5">Nama audio</th>
-            <th scope="col" class="w-24 px-2 py-2.5">Part</th>
-            <th scope="col" class="w-20 px-2 py-2.5">No.</th>
-            <th scope="col" class="w-24 px-3 py-2.5 text-right">Durasi</th>
-            <th scope="col" class="w-28 px-3 py-2.5">Status</th>
-            <th scope="col" class="w-32 px-2 py-2.5 text-right">Aksi</th>
+            <th scope="col" class="w-10 px-2 py-3 text-right">#</th>
+            <th scope="col" class="w-[34%] min-w-[240px] px-3 py-3">Nama audio</th>
+            <th scope="col" class="w-24 px-2 py-3">Part</th>
+            <th scope="col" class="w-20 px-2 py-3">No.</th>
+            <th scope="col" class="w-24 px-3 py-3 text-right">Durasi</th>
+            <th scope="col" class="w-32 px-3 py-3">Status</th>
+            <th scope="col" class="w-32 px-2 py-3 text-right">Aksi</th>
           </tr>
         </thead>
         <tbody>
@@ -81,6 +83,7 @@ function resetDrag(): void {
             @play="emit('play', $event)"
             @crop="emit('crop', $event)"
             @delete="emit('delete', $event)"
+            @attach="emit('attach', $event)"
             @rename="(id, name) => emit('rename', id, name)"
             @update-part="(id, part) => emit('updatePart', id, part)"
             @update-number="(id, number) => emit('updateNumber', id, number)"

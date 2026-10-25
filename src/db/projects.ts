@@ -1,9 +1,8 @@
 import { db } from './index';
 import type { Project } from './types';
+import { MAX_GAP_MS } from './types';
 import { createId } from '@/lib/id';
 import { requestPersistentStorage } from '@/lib/storage';
-
-export const MAX_GAP_MS = 30_000;
 
 export async function createProject(name: string): Promise<Project> {
   const trimmed = name.trim();

@@ -15,10 +15,12 @@ import {
   X,
 } from 'lucide-vue-next';
 import type { Part, Project, Track } from '@/db/types';
+import { hasAudio } from '@/db/types';
 import type { ImportProgress } from '@/db/tracks';
 import type { OrderPatch } from '@/db/tracks';
 import {
   applyTrackOrder,
+  attachAudioToPendingTracks,
   duplicateTrackCrop,
   importAudioFiles,
   resetTrackCrop,
@@ -61,6 +63,8 @@ const allTracks = useLiveQuery<Track[]>(
   () => projectId.value,
 );
 const tracks = computed(() => allTracks.value);
+const playableTracks = computed(() => tracks.value.filter(hasAudio));
+const missingAudioCount = computed(() => tracks.value.length - playableTracks.value.length);
 
 useDocumentTitle(() => project.value?.name ?? 'Sesi audio');
 
@@ -148,6 +152,9 @@ const importInput = ref<HTMLInputElement | null>(null);
 const isImporting = ref(false);
 const importProgress = ref<ImportProgress | null>(null);
 const isDraggingFiles = ref(false);
+const attachInput = ref<HTMLInputElement | null>(null);
+const attachTarget = ref<Track | null>(null);
+const isAttaching = ref(false);
 let dragDepth = 0;
 
 const importPercent = computed(() => {
@@ -248,16 +255,23 @@ async function handleFiles(files: File[]): Promise<void> {
       importProgress.value = progress;
     });
 
-    if (result.imported.length > 0) {
-      toast.success(
-        `${result.imported.length} audio ditambahkan`,
-        {
-          description:
-            result.imported.length === 1
-              ? result.imported[0]?.displayName
-              : 'Urutan awal mengikuti nama file. Gunakan urutkan otomatis untuk merapikan.',
-        },
-      );
+    if (result.imported.length > 0 || result.attached > 0) {
+      const messages: string[] = [];
+      if (result.imported.length > 0) {
+        messages.push(`${result.imported.length} audio ditambahkan`);
+      }
+      if (result.attached > 0) {
+        messages.push(`${result.attached} audio dilampirkan ke preset`);
+      }
+
+      toast.success(messages.join(' · '), {
+        description:
+          result.imported.length === 1
+            ? result.imported[0]?.displayName
+            : result.imported.length > 1
+              ? 'Urutan awal mengikuti nama file. Gunakan urutkan otomatis untuk merapikan.'
+              : 'File audio berhasil dipasang ke baris preset.',
+      });
     }
 
     if (result.errors.length > 0) {
@@ -281,9 +295,43 @@ async function handleFiles(files: File[]): Promise<void> {
   }
 }
 
+function startAttach(track: Track): void {
+  if (isAttaching.value) return;
+  attachTarget.value = track;
+  if (attachInput.value) attachInput.value.value = '';
+  attachInput.value?.click();
+}
+
+async function onAttachFileChange(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  const target = attachTarget.value;
+  input.value = '';
+  if (!file || !target || !project.value) {
+    attachTarget.value = null;
+    return;
+  }
+
+  isAttaching.value = true;
+  try {
+    const attached = await attachAudioToPendingTracks(project.value.id, target.id, file);
+    toast.success(
+      attached > 1 ? `${attached} audio dilampirkan` : 'Audio dilampirkan',
+      { description: 'Metadata dan potongan dari preset dipertahankan.' },
+    );
+  } catch (errorValue) {
+    toast.error(
+      errorValue instanceof Error ? errorValue.message : 'Gagal melampirkan audio.',
+    );
+  } finally {
+    isAttaching.value = false;
+    attachTarget.value = null;
+  }
+}
+
 async function playAll(): Promise<void> {
-  if (!project.value || tracks.value.length === 0) return;
-  await player.startQueue(tracks.value, 0, {
+  if (!project.value || playableTracks.value.length === 0) return;
+  await player.startQueue(playableTracks.value, 0, {
     gapMs: project.value.gapMs,
     autoplay: true,
   });
@@ -294,17 +342,21 @@ async function handlePlayTrack(id: string): Promise<void> {
 
   const track = tracks.value.find((item) => item.id === id);
   if (!track) return;
+  if (!hasAudio(track)) {
+    startAttach(track);
+    return;
+  }
 
   if (player.current?.id === id) {
     await player.toggle();
     return;
   }
 
-  const list = filteredTracks.value.length > 0 ? filteredTracks.value : tracks.value;
+  const list = filteredTracks.value.filter(hasAudio);
   let index = list.findIndex((item) => item.id === id);
   if (index < 0) {
-    index = tracks.value.findIndex((item) => item.id === id);
-    await player.startQueue(tracks.value, Math.max(0, index), {
+    index = playableTracks.value.findIndex((item) => item.id === id);
+    await player.startQueue(playableTracks.value, Math.max(0, index), {
       gapMs: project.value.gapMs,
       autoplay: true,
     });
@@ -319,18 +371,18 @@ async function handlePlayTrack(id: string): Promise<void> {
 
 function queueMatchesProjectTracks(): boolean {
   if (player.queueProjectId !== projectId.value) return false;
-  if (player.queue.length !== tracks.value.length) return false;
+  if (player.queue.length !== playableTracks.value.length) return false;
   const ids = new Set(player.queue.map((item) => item.id));
-  return tracks.value.every((track) => ids.has(track.id));
+  return playableTracks.value.every((track) => ids.has(track.id));
 }
 
 async function openExam(): Promise<void> {
-  if (!project.value || tracks.value.length === 0 || preparingExam.value) return;
+  if (!project.value || playableTracks.value.length === 0 || preparingExam.value) return;
 
   preparingExam.value = true;
   try {
     if (!queueMatchesProjectTracks()) {
-      await player.prepareQueue(tracks.value, 0, { gapMs: project.value.gapMs });
+      await player.prepareQueue(playableTracks.value, 0, { gapMs: project.value.gapMs });
     }
     player.enterExam();
     showExam.value = true;
@@ -635,6 +687,14 @@ onBeforeUnmount(() => {
       @change="onFileInputChange"
     />
 
+    <input
+      ref="attachInput"
+      type="file"
+      accept=".mp3,.wav,.mpeg,.mpg,audio/mpeg,audio/wav,video/mpeg"
+      class="hidden"
+      @change="onAttachFileChange"
+    />
+
     <header class="sticky top-0 z-20 border-b border-line bg-surface/90 backdrop-blur">
       <div class="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
         <RouterLink
@@ -714,7 +774,7 @@ onBeforeUnmount(() => {
         <div class="mt-5 flex flex-wrap items-center gap-2">
           <AppButton
             variant="primary"
-            :disabled="tracks.length === 0"
+            :disabled="playableTracks.length === 0"
             @click="playAll"
           >
             <Play class="size-4" fill="currentColor" aria-hidden="true" />
@@ -741,7 +801,7 @@ onBeforeUnmount(() => {
 
           <AppButton
             variant="ghost"
-            :disabled="tracks.length === 0"
+            :disabled="playableTracks.length === 0"
             :loading="preparingExam"
             @click="openExam"
           >
@@ -780,6 +840,17 @@ onBeforeUnmount(() => {
           :trimmed-count="trimmedCount"
           :gap-ms="gapMs"
         />
+
+        <div
+          v-if="missingAudioCount > 0"
+          class="mt-3 flex items-start gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-xs leading-5 text-muted"
+        >
+          <UploadCloud class="mt-0.5 size-3.5 shrink-0 text-brand" aria-hidden="true" />
+          <p>
+            {{ missingAudioCount }} audio belum punya file. Impor file dengan nama yang sama
+            untuk melampirkan otomatis, atau pakai tombol lampirkan di barisnya.
+          </p>
+        </div>
 
         <div
           v-if="isImporting && importProgress"
@@ -882,6 +953,7 @@ onBeforeUnmount(() => {
             @play="handlePlayTrack"
             @crop="openCrop"
             @delete="handleDelete"
+            @attach="startAttach"
             @rename="handleRename"
             @update-part="handleUpdatePart"
             @update-number="handleUpdateNumber"
@@ -908,6 +980,7 @@ onBeforeUnmount(() => {
     <SettingsDialog
       :open="showSettings"
       :project="project"
+      :tracks="tracks"
       :track-count="tracks.length"
       :total-duration="totalDuration"
       @close="showSettings = false"

@@ -1,5 +1,7 @@
 export type Part = 'A' | 'B' | 'C' | 'FULL' | 'OTHER';
 
+export const MAX_GAP_MS = 30_000;
+
 export type TrackKind = 'question' | 'part' | 'full' | 'other';
 
 export interface Project {
@@ -47,6 +49,8 @@ export interface ImportError {
 
 export interface ImportResult {
   imported: Track[];
+  /** Pending preset tracks that received their audio file during this import. */
+  attached: number;
   errors: ImportError[];
 }
 
@@ -58,4 +62,12 @@ export interface ProjectSummary extends Project {
 export interface StorageEstimate {
   usage: number | null;
   quota: number | null;
+}
+
+/**
+ * Tracks restored from a preset have no audio blob until their file is
+ * imported again on this device.
+ */
+export function hasAudio(track: Track): boolean {
+  return track.blobId !== '';
 }

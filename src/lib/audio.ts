@@ -51,6 +51,23 @@ export function normalizeAudioBlob(file: File): Blob {
   return file.slice(0, file.size, mimeType);
 }
 
+/**
+ * Clamp a saved trim range to the actual duration of a (possibly different)
+ * audio file. Falls back to the full file when the saved range is too short.
+ */
+export function fitTrimRange(
+  trimStart: number,
+  trimEnd: number,
+  duration: number,
+): { trimStart: number; trimEnd: number } {
+  const max = Math.max(0, duration);
+  if (max < 0.1) return { trimStart: 0, trimEnd: max };
+
+  const start = Math.min(Math.max(0, trimStart), max - 0.1);
+  const end = Math.min(Math.max(start + 0.1, trimEnd), max);
+  return { trimStart: start, trimEnd: end };
+}
+
 export function getAudioDuration(file: Blob): Promise<number> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
